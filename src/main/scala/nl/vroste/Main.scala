@@ -3,7 +3,6 @@ package nl.vroste
 import com.spotify.scio._
 import kantan.csv._
 import com.spotify.scio.extra.csv._
-import com.spotify.scio.extra.sorter._
 import com.spotify.scio.values.SCollection
 
 /*
@@ -64,7 +63,7 @@ object Model {
     def add(d1: GemeenteData, d2: GemeenteData): GemeenteData =
       d1.copy(
         ziekenhuisOpnames = d1.ziekenhuisOpnames + d2.ziekenhuisOpnames,
-        totaal = d1.ziekenhuisOpnames + d2.ziekenhuisOpnames,
+        totaal = d1.totaal + d2.totaal,
         overleden = d1.overleden + d2.overleden
       )
 
@@ -107,9 +106,20 @@ object CsvDecoders {
     "Aantal",
     "AantalCumulatief"
   )(RivmDataRow.apply)
+
+  implicit val encoder: HeaderEncoder[GemeenteData] = HeaderEncoder.encoder(
+    "Datum",
+    "Gemeentecode",
+    "Gemeentenaam",
+    "Provincienaam",
+    "Provinciecode",
+    "ZiekenhuisOpnames",
+    "Totaal",
+    "Overleden"
+  )(Function.unlift(GemeenteData.unapply))
 }
 
-object WordCount {
+object Main {
   import Model._
   import CsvDecoders._
 
@@ -126,7 +136,7 @@ object WordCount {
       .map(r => ((r.datum, r.gemeenteCode), GemeenteData.fromRow(r)))
       .reduceByKey(GemeenteData.add)
       .map(_._2)
-      .saveAsTextFile(output)
+      .saveAsCsvFile(output)
 
     sc.run().waitUntilFinish()
   }
