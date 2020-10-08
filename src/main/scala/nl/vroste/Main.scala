@@ -194,9 +194,11 @@ object Main {
 
     rows
       .timestampBy(r => dateToInstant(r.datum))
-      .withSlidingWindows(size = 7.days, period = 1.day)
       .map(GemeenteData.fromRow)
-      .aggregate(aggregator)
+      .keyBy(_.gemeenteCode)
+      .withSlidingWindows(size = 7.days, period = 1.day)
+      .aggregateByKey(aggregator)
+      .map(_._2)
       .saveAsCsvFile(outputPath)
 
     sc.run().waitUntilFinish()
