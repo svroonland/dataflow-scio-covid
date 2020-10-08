@@ -1,9 +1,17 @@
 package nl.vroste
 
+import java.time.ZoneId
+import java.util.TimeZone
+
 import com.spotify.scio._
-import kantan.csv._
 import com.spotify.scio.extra.csv._
-import com.spotify.scio.values.SCollection
+import com.spotify.scio.values.{SCollection, WindowOptions}
+import kantan.csv._
+import org.apache.beam.sdk.transforms.windowing.TimestampCombiner
+import org.joda.time
+import org.joda.time.{DateTimeZone, Instant, LocalDate, LocalTime}
+
+import scala.concurrent.duration._
 
 /*
 sbt "runMain [PACKAGE].WordCount
@@ -37,7 +45,14 @@ object Model {
       ziekenhuisOpnames: Int,
       totaal: Int,
       overleden: Int
-  )
+  ) {
+    def divideBy(nr: Int): GemeenteData =
+      copy(
+        ziekenhuisOpnames = (ziekenhuisOpnames * 1.0 / nr).toInt,
+        totaal = (totaal * 1.0 / nr).toInt,
+        overleden = (overleden * 1.0 / nr).toInt
+      )
+  }
 
   object GemeenteData {
     def fromRow(r: RivmDataRow): GemeenteData = {
@@ -103,23 +118,41 @@ object CsvDecoders {
 }
 
 object Main {
-  import Model._
   import CsvDecoders._
+  import Model._
+
+  def dateToInstant(date: String): Instant =
+    LocalDate
+      .parse(date)
+      .toDateTime(LocalTime.MIDNIGHT)
+      .toDateTime(
+        DateTimeZone.forTimeZone(TimeZone.getTimeZone(ZoneId.of("GMT+2")))
+      )
+      .toInstant
+
+  implicit def scalaDurationAsJodaDuration(
+      d: FiniteDuration
+  ): org.joda.time.Duration =
+    org.joda.time.Duration.millis(d.toMillis)
 
   def main(cmdlineArgs: Array[String]): Unit = {
     val (sc, args) = ContextAndArgs(cmdlineArgs)
 
-    val exampleData = "gs://steven-dataworkz-scio/RIVM_NL_municipal.csv"
-    val input = args.getOrElse("input", exampleData)
-    val output = args("output")
+    val inputPath = args("input")
+    val outputPath = args("output")
 
-    val rows: SCollection[RivmDataRow] = sc.csvFile(input)
+    val rows: SCollection[RivmDataRow] = sc.csvFile[RivmDataRow](inputPath)
+
+    val windowSizeDays = 7
 
     rows
-      .map(r => ((r.datum, r.gemeenteCode), GemeenteData.fromRow(r)))
-      .reduceByKey(GemeenteData.add)
+      .timestampBy(r => dateToInstant(r.datum))
+      .withSlidingWindows(size = 7.days, period = 1.day)
+      .map(GemeenteData.fromRow)
+      .groupMapReduce(_.gemeenteCode)(GemeenteData.add)
+      .mapValues(_.divideBy(7))
       .map(_._2)
-      .saveAsCsvFile(output)
+      .saveAsCsvFile(outputPath)
 
     sc.run().waitUntilFinish()
   }
