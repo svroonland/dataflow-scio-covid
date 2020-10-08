@@ -5,10 +5,9 @@ import java.util.TimeZone
 
 import com.spotify.scio._
 import com.spotify.scio.extra.csv._
-import com.spotify.scio.values.{SCollection, WindowOptions}
+import com.spotify.scio.values.SCollection
+import com.twitter.algebird.{Aggregator, AveragedValue, MonoidAggregator}
 import kantan.csv._
-import org.apache.beam.sdk.transforms.windowing.TimestampCombiner
-import org.joda.time
 import org.joda.time.{DateTimeZone, Instant, LocalDate, LocalTime}
 
 import scala.concurrent.duration._
@@ -42,46 +41,48 @@ object Model {
       gemeenteNaam: String,
       provincieNaam: String,
       provincieCode: Int,
-      ziekenhuisOpnames: Int,
-      totaal: Int,
-      overleden: Int
-  ) {
-    def divideBy(nr: Int): GemeenteData =
-      copy(
-        ziekenhuisOpnames = (ziekenhuisOpnames * 1.0 / nr).toInt,
-        totaal = (totaal * 1.0 / nr).toInt,
-        overleden = (overleden * 1.0 / nr).toInt
+      counts: Counts
+  )
+
+  case class Counts(positiveTests: Int, hospitalAdmissions: Int, deaths: Int)
+
+  object Counts {
+    def add(x: Counts, y: Counts): Counts =
+      Counts(
+        positiveTests = x.positiveTests + y.positiveTests,
+        hospitalAdmissions = x.hospitalAdmissions + y.hospitalAdmissions,
+        deaths = x.deaths + y.deaths
       )
+
+    def fromRow(r: RivmDataRow) =
+      (r.`type`, r.aantal) match {
+        case (Totaal, Some(aantal))           => Counts(aantal, 0, 0)
+        case (ZiekenhuisOpname, Some(aantal)) => Counts(0, aantal, 0)
+        case (Overleden, Some(aantal))        => Counts(0, 0, aantal)
+        case _                                => Counts(0, 0, 0)
+      }
   }
 
   object GemeenteData {
-    def fromRow(r: RivmDataRow): GemeenteData = {
-      val (ziekenhuisOpnames, totaal, overleden) = (r.`type`, r.aantal) match {
-        case (ZiekenhuisOpname, Some(aantal)) => (aantal, 0, 0)
-        case (Totaal, Some(aantal))           => (0, aantal, 0)
-        case (Overleden, Some(aantal))        => (0, 0, aantal)
-        case _                                => (0, 0, 0)
-      }
-
+    def fromRow(r: RivmDataRow): GemeenteData =
       GemeenteData(
         r.datum,
         r.gemeenteCode,
         r.gemeenteNaam,
         r.provincieNaam,
         r.provincieCode,
-        ziekenhuisOpnames,
-        totaal,
-        overleden
+        Counts.fromRow(r)
       )
-    }
 
     def add(d1: GemeenteData, d2: GemeenteData): GemeenteData =
-      d1.copy(
-        ziekenhuisOpnames = d1.ziekenhuisOpnames + d2.ziekenhuisOpnames,
-        totaal = d1.totaal + d2.totaal,
-        overleden = d1.overleden + d2.overleden
-      )
+      d1.copy(counts = Counts.add(d1.counts, d2.counts))
   }
+
+  case class CovidStatistics(
+      gemeente: GemeenteData,
+      current: Counts,
+      average: Counts
+  )
 }
 
 object CsvDecoders {
@@ -105,16 +106,33 @@ object CsvDecoders {
     "AantalCumulatief"
   )(RivmDataRow.apply)
 
-  implicit val encoder: HeaderEncoder[GemeenteData] = HeaderEncoder.encoder(
+  implicit val encoder: HeaderEncoder[CovidStatistics] = HeaderEncoder.encoder(
     "Datum",
     "Gemeentecode",
     "Gemeentenaam",
     "Provincienaam",
     "Provinciecode",
-    "ZiekenhuisOpnames",
-    "Totaal",
-    "Overleden"
-  )(Function.unlift(GemeenteData.unapply))
+    "HospitalAdmissions",
+    "HospitalAdmissionsAvg",
+    "Cases",
+    "CasesAvg",
+    "Deaths",
+    "DeathsAvg"
+  ) { (stats: CovidStatistics) =>
+    (
+      stats.gemeente.datum,
+      stats.gemeente.gemeenteCode,
+      stats.gemeente.gemeenteNaam,
+      stats.gemeente.provincieNaam,
+      stats.gemeente.provincieCode,
+      stats.current.hospitalAdmissions,
+      stats.average.hospitalAdmissions,
+      stats.current.positiveTests,
+      stats.average.positiveTests,
+      stats.current.deaths,
+      stats.average.deaths
+    )
+  }
 }
 
 object Main {
@@ -135,6 +153,37 @@ object Main {
   ): org.joda.time.Duration =
     org.joda.time.Duration.millis(d.toMillis)
 
+  val averageAggregator: MonoidAggregator[
+    Counts,
+    ((AveragedValue, AveragedValue), AveragedValue),
+    Counts
+  ] =
+    (AveragedValue
+      .numericAggregator[Int] zip AveragedValue
+      .numericAggregator[Int] zip AveragedValue.numericAggregator[Int])
+      .composePrepare[Counts](c =>
+        ((c.positiveTests, c.hospitalAdmissions), c.deaths)
+      )
+      .andThenPresent {
+        case ((p, h), d) => Counts(p.toInt, h.toInt, d.toInt)
+      }
+
+  /**
+    * This is an aggregator that takes the last GemeenteData and averages the three statistics
+    */
+  val aggregator: Aggregator[
+    GemeenteData,
+    (GemeenteData, ((AveragedValue, AveragedValue), AveragedValue)),
+    CovidStatistics
+  ] =
+    (Aggregator
+      .last[GemeenteData] join averageAggregator.composePrepare[GemeenteData](
+      _.counts
+    )).andThenPresent {
+      case (gemeenteData, average) =>
+        CovidStatistics(gemeenteData, gemeenteData.counts, average)
+    }
+
   def main(cmdlineArgs: Array[String]): Unit = {
     val (sc, args) = ContextAndArgs(cmdlineArgs)
 
@@ -143,15 +192,11 @@ object Main {
 
     val rows: SCollection[RivmDataRow] = sc.csvFile[RivmDataRow](inputPath)
 
-    val windowSizeDays = 7
-
     rows
       .timestampBy(r => dateToInstant(r.datum))
       .withSlidingWindows(size = 7.days, period = 1.day)
       .map(GemeenteData.fromRow)
-      .groupMapReduce(_.gemeenteCode)(GemeenteData.add)
-      .mapValues(_.divideBy(7))
-      .map(_._2)
+      .aggregate(aggregator)
       .saveAsCsvFile(outputPath)
 
     sc.run().waitUntilFinish()
