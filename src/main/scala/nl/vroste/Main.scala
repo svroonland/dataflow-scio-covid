@@ -66,23 +66,6 @@ object Model {
         totaal = d1.totaal + d2.totaal,
         overleden = d1.overleden + d2.overleden
       )
-
-    def fromRows(rows: Seq[RivmDataRow]): Option[GemeenteData] =
-      for {
-        r <- rows.headOption
-        ziekenhuisOpnameRow <- rows.find(_.`type` == ZiekenhuisOpname)
-        totaalRow <- rows.find(_.`type` == Totaal)
-        overledenRow <- rows.find(_.`type` == Overleden)
-      } yield GemeenteData(
-        r.datum,
-        r.gemeenteCode,
-        r.gemeenteNaam,
-        r.provincieNaam,
-        r.provincieCode,
-        ziekenhuisOpnameRow.aantal.getOrElse(0),
-        totaalRow.aantal.getOrElse(0),
-        overledenRow.aantal.getOrElse(0)
-      )
   }
 }
 
