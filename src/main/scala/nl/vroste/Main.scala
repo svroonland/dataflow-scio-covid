@@ -5,9 +5,14 @@ import java.util.TimeZone
 
 import com.spotify.scio._
 import com.spotify.scio.extra.csv._
-import com.spotify.scio.values.SCollection
+import com.spotify.scio.values.{SCollection, WindowOptions}
 import com.twitter.algebird.{Aggregator, AveragedValue, MonoidAggregator}
 import kantan.csv._
+import org.apache.beam.sdk.transforms.windowing.{
+  AfterWatermark,
+  TimestampCombiner
+}
+import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
 import org.joda.time.{DateTimeZone, Instant, LocalDate, LocalTime}
 
 import scala.concurrent.duration._
@@ -26,21 +31,17 @@ object Model {
   case object Overleden extends DataType
 
   case class RivmDataRow(
-      datum: String,
-      gemeenteCode: Int,
-      gemeenteNaam: String,
-      provincieNaam: String,
-      provincieCode: Int,
+      datum: LocalDate,
+      gemeente: String,
+      provincie: String,
       `type`: DataType,
       aantal: Option[Int],
       aantalCumulatief: Option[Int]
   )
   case class GemeenteData(
-      datum: String,
-      gemeenteCode: Int,
-      gemeenteNaam: String,
-      provincieNaam: String,
-      provincieCode: Int,
+      datum: LocalDate,
+      gemeente: String,
+      provincie: String,
       counts: Counts
   )
 
@@ -67,10 +68,8 @@ object Model {
     def fromRow(r: RivmDataRow): GemeenteData =
       GemeenteData(
         r.datum,
-        r.gemeenteCode,
-        r.gemeenteNaam,
-        r.provincieNaam,
-        r.provincieCode,
+        r.gemeente,
+        r.provincie,
         Counts.fromRow(r)
       )
 
@@ -95,12 +94,24 @@ object CsvDecoders {
       case "Overleden"        => Right(Overleden)
     }
 
+  def dateToInstant(date: LocalDate): Instant =
+    date
+      .toLocalDateTime(LocalTime.MIDNIGHT)
+      .toDateTime(
+        DateTimeZone.forTimeZone(TimeZone.getTimeZone(ZoneId.of("GMT+2")))
+      )
+      .toInstant
+
+  implicit val localDateDecoder: CellDecoder[LocalDate] =
+    CellDecoder[String].map(LocalDate.parse)
+
+  implicit val localDateEncoder: CellEncoder[LocalDate] =
+    CellEncoder[String].contramap[LocalDate](dateToInstant(_).toString)
+
   implicit val decoder: HeaderDecoder[RivmDataRow] = HeaderDecoder.decoder(
     "Datum",
-    "Gemeentecode",
     "Gemeentenaam",
     "Provincienaam",
-    "Provinciecode",
     "Type",
     "Aantal",
     "AantalCumulatief"
@@ -108,10 +119,8 @@ object CsvDecoders {
 
   implicit val encoder: HeaderEncoder[CovidStatistics] = HeaderEncoder.encoder(
     "Datum",
-    "Gemeentecode",
     "Gemeentenaam",
     "Provincienaam",
-    "Provinciecode",
     "HospitalAdmissions",
     "HospitalAdmissionsAvg",
     "Cases",
@@ -121,10 +130,8 @@ object CsvDecoders {
   ) { (stats: CovidStatistics) =>
     (
       stats.gemeente.datum,
-      stats.gemeente.gemeenteCode,
-      stats.gemeente.gemeenteNaam,
-      stats.gemeente.provincieNaam,
-      stats.gemeente.provincieCode,
+      stats.gemeente.gemeente,
+      stats.gemeente.provincie,
       stats.current.hospitalAdmissions,
       stats.average.hospitalAdmissions,
       stats.current.positiveTests,
@@ -133,20 +140,30 @@ object CsvDecoders {
       stats.average.deaths
     )
   }
+
+  implicit val gemeenteDataEncoder: HeaderEncoder[GemeenteData] =
+    HeaderEncoder.encoder(
+      "Datum",
+      "Gemeentenaam",
+      "Provincienaam",
+      "HospitalAdmissions",
+      "Cases",
+      "Deaths"
+    ) { (data: GemeenteData) =>
+      (
+        data.datum,
+        data.gemeente,
+        data.provincie,
+        data.counts.hospitalAdmissions,
+        data.counts.positiveTests,
+        data.counts.deaths
+      )
+    }
 }
 
 object Main {
   import CsvDecoders._
   import Model._
-
-  def dateToInstant(date: String): Instant =
-    LocalDate
-      .parse(date)
-      .toDateTime(LocalTime.MIDNIGHT)
-      .toDateTime(
-        DateTimeZone.forTimeZone(TimeZone.getTimeZone(ZoneId.of("GMT+2")))
-      )
-      .toInstant
 
   implicit def scalaDurationAsJodaDuration(
       d: FiniteDuration
@@ -176,13 +193,12 @@ object Main {
     (GemeenteData, ((AveragedValue, AveragedValue), AveragedValue)),
     CovidStatistics
   ] =
-    (Aggregator
-      .last[GemeenteData] join averageAggregator.composePrepare[GemeenteData](
-      _.counts
-    )).andThenPresent {
-      case (gemeenteData, average) =>
-        CovidStatistics(gemeenteData, gemeenteData.counts, average)
-    }
+    (Aggregator.last[GemeenteData] join
+      averageAggregator.composePrepare[GemeenteData](_.counts))
+      .andThenPresent {
+        case (gemeenteData, average) =>
+          CovidStatistics(gemeenteData, gemeenteData.counts, average)
+      }
 
   def main(cmdlineArgs: Array[String]): Unit = {
     val (sc, args) = ContextAndArgs(cmdlineArgs)
@@ -192,14 +208,33 @@ object Main {
 
     val rows: SCollection[RivmDataRow] = sc.csvFile[RivmDataRow](inputPath)
 
-    rows
-      .timestampBy(r => dateToInstant(r.datum))
-      .map(GemeenteData.fromRow)
-      .keyBy(_.gemeenteCode)
-      .withSlidingWindows(size = 7.days, period = 1.day)
-      .aggregateByKey(aggregator)
-      .map(_._2)
-      .saveAsCsvFile(outputPath)
+    val combined =
+      rows
+        .timestampBy(r => dateToInstant(r.datum))
+
+//    combined.map(_._2).saveAsCsvFile(outputPath)
+    val aggregated =
+      combined
+        .withSlidingWindows(
+          size = 7.days,
+          period = 1.day,
+          options = WindowOptions(
+            timestampCombiner = TimestampCombiner.LATEST,
+            trigger = AfterWatermark.pastEndOfWindow(),
+            allowedLateness = 0.days,
+            accumulationMode = AccumulationMode.DISCARDING_FIRED_PANES
+          )
+        )
+        .map(GemeenteData.fromRow)
+        .keyBy(d => (d.gemeente, d.datum))
+        .reduceByKey(GemeenteData.add)
+        .values
+        .groupMapReduce(_.gemeente)(GemeenteData.add)
+        //        .withWindow[IntervalWindow]
+        // TODO it doesn't seem to produce windows per day
+        .aggregateByKey(aggregator)
+        .values
+        .saveAsCsvFile(outputPath)
 
     sc.run().waitUntilFinish()
   }
