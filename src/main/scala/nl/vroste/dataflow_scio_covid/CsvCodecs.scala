@@ -1,6 +1,7 @@
-package nl.vroste
+package nl.vroste.dataflow_scio_covid
+
 import kantan.csv.{CellDecoder, CellEncoder, HeaderDecoder, HeaderEncoder}
-import nl.vroste.Util.dateToInstant
+import Util.dateToInstant
 import org.joda.time.LocalDate
 
 object CsvCodecs {

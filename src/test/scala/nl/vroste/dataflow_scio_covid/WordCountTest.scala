@@ -1,4 +1,4 @@
-package nl.vroste
+package nl.vroste.dataflow_scio_covid
 
 import com.spotify.scio.io.TextIO
 import com.spotify.scio.testing._
@@ -9,7 +9,7 @@ class WordCountTest extends PipelineSpec {
   val expected = Seq("a: 3", "b: 3", "c: 1", "d: 1", "e: 1")
 
   "WordCount" should "work" in {
-    JobTest[nl.vroste.Main.type]
+    JobTest[Main.type]
       .args("--input=in.txt", "--output=out.txt")
       .input(TextIO("in.txt"), inData)
       .output(TextIO("out.txt"))(_ should containInAnyOrder(expected))

@@ -1,4 +1,5 @@
-package nl.vroste
+package nl.vroste.dataflow_scio_covid
+
 import org.joda.time.LocalDate
 
 sealed trait DataType

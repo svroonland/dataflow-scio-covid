@@ -1,10 +1,10 @@
-package nl.vroste
+package nl.vroste.dataflow_scio_covid
 
 import com.spotify.scio._
 import com.spotify.scio.extra.csv._
 import com.spotify.scio.values.{SCollection, WindowOptions}
 import com.twitter.algebird.{Aggregator, AveragedValue, MonoidAggregator}
-import nl.vroste.Util.dateToInstant
+import Util.dateToInstant
 import org.apache.beam.sdk.transforms.windowing.{
   AfterWatermark,
   TimestampCombiner
