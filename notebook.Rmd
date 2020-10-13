@@ -1,0 +1,41 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+## Install packages
+```{r}
+install.packages("tidyr")
+install.packages("dplyr")
+install.packages("ggplot2")
+```
+
+## Load packages
+```{r}
+require("ggplot2")
+require("dplyr")
+require("tidyr")
+```
+
+## Load data
+```{r}
+data = read.csv("~/projects/dataworkz/scio-job/output/result.csv") %>% mutate(Datum = as.POSIXct(Datum), Gemeentenaam = factor(Gemeentenaam))
+glimpse(data)
+```
+
+## Prepare for plotting
+```{r}
+data2 = data %>% gather("Cases", "CasesAvg", key="Measurement", value="Value")
+glimpse(data2)
+```
+
+## Plot
+
+```{r}
+secondWave = data2 %>% filter(Gemeentenaam %in% c("Utrecht", "Amsterdam", "Rotterdam")) %>% filter(Datum >= as.POSIXct("2020-06-01"))
+qplot(Datum, Value, color=Measurement, data = secondWave, geom="line", log="y") + facet_wrap(vars(Gemeentenaam))
+```
