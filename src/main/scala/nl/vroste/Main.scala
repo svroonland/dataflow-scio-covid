@@ -16,6 +16,7 @@ import org.apache.beam.sdk.values.WindowingStrategy.AccumulationMode
 import org.joda.time.{DateTimeZone, Instant, LocalDate, LocalTime}
 
 import scala.concurrent.duration._
+import scala.language.implicitConversions
 
 object Model {
   sealed trait DataType
@@ -207,7 +208,7 @@ object Main {
         size = 7.days,
         period = 1.day,
         options = WindowOptions(
-          timestampCombiner = TimestampCombiner.LATEST,
+          timestampCombiner = TimestampCombiner.END_OF_WINDOW,
           trigger = AfterWatermark.pastEndOfWindow(),
           allowedLateness = 0.days,
           accumulationMode = AccumulationMode.DISCARDING_FIRED_PANES
