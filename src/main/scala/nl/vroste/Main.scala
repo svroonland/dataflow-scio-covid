@@ -187,7 +187,7 @@ object Main {
     (GemeenteData, ((AveragedValue, AveragedValue), AveragedValue)),
     CovidStatistics
   ] =
-    (Aggregator.last[GemeenteData] join
+    (Aggregator.maxBy((_: GemeenteData).datum) join
       averageAggregator.composePrepare[GemeenteData](_.counts))
       .andThenPresent {
         case (gemeenteData, average) =>
@@ -218,7 +218,7 @@ object Main {
       .keyBy(d => (d.gemeente, d.datum))
       .reduceByKey(GemeenteData.add)
       .values
-      .groupMapReduce(_.gemeente)(GemeenteData.add)
+      .keyBy(_.gemeente)
       .aggregateByKey(aggregator)
       .values
       .saveAsCsvFile(outputPath)
