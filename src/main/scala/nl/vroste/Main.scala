@@ -17,13 +17,6 @@ import org.joda.time.{DateTimeZone, Instant, LocalDate, LocalTime}
 
 import scala.concurrent.duration._
 
-/*
-sbt "runMain [PACKAGE].WordCount
-  --project=[PROJECT] --runner=DataflowRunner --zone=[ZONE]
-  --input=gs://dataflow-samples/shakespeare/kinglear.txt
-  --output=gs://[BUCKET]/[PATH]/wordcount"
- */
-
 object Model {
   sealed trait DataType
   case object ZiekenhuisOpname extends DataType
@@ -208,33 +201,26 @@ object Main {
 
     val rows: SCollection[RivmDataRow] = sc.csvFile[RivmDataRow](inputPath)
 
-    val combined =
-      rows
-        .timestampBy(r => dateToInstant(r.datum))
-
-//    combined.map(_._2).saveAsCsvFile(outputPath)
-    val aggregated =
-      combined
-        .withSlidingWindows(
-          size = 7.days,
-          period = 1.day,
-          options = WindowOptions(
-            timestampCombiner = TimestampCombiner.LATEST,
-            trigger = AfterWatermark.pastEndOfWindow(),
-            allowedLateness = 0.days,
-            accumulationMode = AccumulationMode.DISCARDING_FIRED_PANES
-          )
+    rows
+      .timestampBy(r => dateToInstant(r.datum))
+      .withSlidingWindows(
+        size = 7.days,
+        period = 1.day,
+        options = WindowOptions(
+          timestampCombiner = TimestampCombiner.LATEST,
+          trigger = AfterWatermark.pastEndOfWindow(),
+          allowedLateness = 0.days,
+          accumulationMode = AccumulationMode.DISCARDING_FIRED_PANES
         )
-        .map(GemeenteData.fromRow)
-        .keyBy(d => (d.gemeente, d.datum))
-        .reduceByKey(GemeenteData.add)
-        .values
-        .groupMapReduce(_.gemeente)(GemeenteData.add)
-        //        .withWindow[IntervalWindow]
-        // TODO it doesn't seem to produce windows per day
-        .aggregateByKey(aggregator)
-        .values
-        .saveAsCsvFile(outputPath)
+      )
+      .map(GemeenteData.fromRow)
+      .keyBy(d => (d.gemeente, d.datum))
+      .reduceByKey(GemeenteData.add)
+      .values
+      .groupMapReduce(_.gemeente)(GemeenteData.add)
+      .aggregateByKey(aggregator)
+      .values
+      .saveAsCsvFile(outputPath)
 
     sc.run().waitUntilFinish()
   }
