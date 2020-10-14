@@ -8,17 +8,17 @@ case object Totaal extends DataType
 case object Overleden extends DataType
 
 case class RivmDataRow(
-    datum: LocalDate,
-    gemeente: String,
-    provincie: String,
+    date: LocalDate,
+    municipality: String,
+    province: String,
     `type`: DataType,
-    aantal: Option[Int],
-    aantalCumulatief: Option[Int]
+    number: Option[Int],
+    numberCumulative: Option[Int]
 )
-case class GemeenteData(
-    datum: LocalDate,
-    gemeente: String,
-    provincie: String,
+case class MunicipalityData(
+    date: LocalDate,
+    municipality: String,
+    province: String,
     counts: Counts
 )
 
@@ -32,8 +32,8 @@ object Counts {
       deaths = x.deaths + y.deaths
     )
 
-  def fromRow(r: RivmDataRow) =
-    (r.`type`, r.aantal) match {
+  def fromRow(r: RivmDataRow): Counts =
+    (r.`type`, r.number) match {
       case (Totaal, Some(aantal))           => Counts(aantal, 0, 0)
       case (ZiekenhuisOpname, Some(aantal)) => Counts(0, aantal, 0)
       case (Overleden, Some(aantal))        => Counts(0, 0, aantal)
@@ -41,21 +41,21 @@ object Counts {
     }
 }
 
-object GemeenteData {
-  def fromRow(r: RivmDataRow): GemeenteData =
-    GemeenteData(
-      r.datum,
-      r.gemeente,
-      r.provincie,
+object MunicipalityData {
+  def fromRow(r: RivmDataRow): MunicipalityData =
+    MunicipalityData(
+      r.date,
+      r.municipality,
+      r.province,
       Counts.fromRow(r)
     )
 
-  def add(d1: GemeenteData, d2: GemeenteData): GemeenteData =
+  def add(d1: MunicipalityData, d2: MunicipalityData): MunicipalityData =
     d1.copy(counts = Counts.add(d1.counts, d2.counts))
 }
 
 case class CovidStatistics(
-    gemeente: GemeenteData,
+    municipality: MunicipalityData,
     current: Counts,
     average: Counts
 )

@@ -35,13 +35,9 @@ object Main {
       }
 
   // Aggregator for whole GemeenteData objects
-  val gemeenteDataAggregator: Aggregator[
-    GemeenteData,
-    (GemeenteData, ((AveragedValue, AveragedValue), AveragedValue)),
-    CovidStatistics
-  ] =
-    (Aggregator.maxBy((_: GemeenteData).datum) join
-      countAverageAggregator.composePrepare[GemeenteData](_.counts))
+  val gemeenteDataAggregator =
+    (Aggregator.maxBy((_: MunicipalityData).date) join
+      countAverageAggregator.composePrepare[MunicipalityData](_.counts))
       .andThenPresent {
         case (gemeenteData, average) =>
           CovidStatistics(gemeenteData, gemeenteData.counts, average)
@@ -56,7 +52,7 @@ object Main {
     val rows: SCollection[RivmDataRow] = sc.csvFile[RivmDataRow](inputPath)
 
     rows
-      .timestampBy(r => dateToInstant(r.datum))
+      .timestampBy(r => dateToInstant(r.date))
       .withSlidingWindows(
         size = 7.days,
         period = 1.day,
@@ -67,11 +63,13 @@ object Main {
           accumulationMode = AccumulationMode.DISCARDING_FIRED_PANES
         )
       )
-      .map(GemeenteData.fromRow)
-      .keyBy(d => (d.gemeente, d.datum))
-      .reduceByKey(GemeenteData.add)
+      .map(
+        MunicipalityData.fromRow
+      )
+      .keyBy(d => (d.municipality, d.date))
+      .reduceByKey(MunicipalityData.add)
       .values
-      .keyBy(_.gemeente)
+      .keyBy(_.municipality)
       .aggregateByKey(gemeenteDataAggregator)
       .values
       .saveAsCsvFile(outputPath)

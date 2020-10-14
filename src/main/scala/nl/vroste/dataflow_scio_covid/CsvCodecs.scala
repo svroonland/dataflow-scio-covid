@@ -32,9 +32,9 @@ object CsvCodecs {
 
   implicit val covidStatisticsEncoder: HeaderEncoder[CovidStatistics] =
     HeaderEncoder.encoder(
-      "Datum",
-      "Gemeentenaam",
-      "Provincienaam",
+      "Date",
+      "Municipality",
+      "Province",
       "HospitalAdmissions",
       "HospitalAdmissionsAvg",
       "Cases",
@@ -43,9 +43,9 @@ object CsvCodecs {
       "DeathsAvg"
     ) { (stats: CovidStatistics) =>
       (
-        stats.gemeente.datum,
-        stats.gemeente.gemeente,
-        stats.gemeente.provincie,
+        stats.municipality.date,
+        stats.municipality.municipality,
+        stats.municipality.province,
         stats.current.hospitalAdmissions,
         stats.average.hospitalAdmissions,
         stats.current.positiveTests,
@@ -55,19 +55,19 @@ object CsvCodecs {
       )
     }
 
-  implicit val gemeenteDataEncoder: HeaderEncoder[GemeenteData] =
+  implicit val municipalityDataEncoder: HeaderEncoder[MunicipalityData] =
     HeaderEncoder.encoder(
-      "Datum",
-      "Gemeentenaam",
-      "Provincienaam",
+      "Date",
+      "Municipality",
+      "Province",
       "HospitalAdmissions",
       "Cases",
       "Deaths"
-    ) { (data: GemeenteData) =>
+    ) { (data: MunicipalityData) =>
       (
-        data.datum,
-        data.gemeente,
-        data.provincie,
+        data.date,
+        data.municipality,
+        data.province,
         data.counts.hospitalAdmissions,
         data.counts.positiveTests,
         data.counts.deaths
