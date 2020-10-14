@@ -14,10 +14,10 @@ object CsvCodecs {
 
   implicit val rivmDataRowDecoder: HeaderDecoder[RivmDataRow] = {
     implicit val dataTypeDecoder: CellDecoder[DataType] =
-      CellDecoder[String].emap {
-        case "Totaal"           => Right(Totaal)
-        case "Ziekenhuisopname" => Right(ZiekenhuisOpname)
-        case "Overleden"        => Right(Overleden)
+      CellDecoder[String].map {
+        case "Totaal"           => Totaal
+        case "Ziekenhuisopname" => ZiekenhuisOpname
+        case "Overleden"        => Overleden
       }
 
     HeaderDecoder.decoder(

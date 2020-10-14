@@ -35,12 +35,12 @@ object Main {
       }
 
   // Aggregator for whole GemeenteData objects
-  val gemeenteDataAggregator =
-    (Aggregator.maxBy((_: MunicipalityData).date) join
+  val municipalityDataAggregator =
+    (Aggregator.maxBy((_: MunicipalityData).date) join // Output the
       countAverageAggregator.composePrepare[MunicipalityData](_.counts))
       .andThenPresent {
-        case (gemeenteData, average) =>
-          CovidStatistics(gemeenteData, gemeenteData.counts, average)
+        case (municipalityData, average) =>
+          CovidStatistics(municipalityData, municipalityData.counts, average)
       }
 
   def main(cmdlineArgs: Array[String]): Unit = {
@@ -70,7 +70,7 @@ object Main {
       .reduceByKey(MunicipalityData.add)
       .values
       .keyBy(_.municipality)
-      .aggregateByKey(gemeenteDataAggregator)
+      .aggregateByKey(municipalityDataAggregator)
       .values
       .saveAsCsvFile(outputPath)
 

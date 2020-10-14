@@ -15,12 +15,26 @@ case class RivmDataRow(
     number: Option[Int],
     numberCumulative: Option[Int]
 )
+
 case class MunicipalityData(
     date: LocalDate,
     municipality: String,
     province: String,
     counts: Counts
 )
+
+object MunicipalityData {
+  def fromRow(r: RivmDataRow): MunicipalityData =
+    MunicipalityData(
+      r.date,
+      r.municipality,
+      r.province,
+      Counts.fromRow(r)
+    )
+
+  def add(d1: MunicipalityData, d2: MunicipalityData): MunicipalityData =
+    d1.copy(counts = Counts.add(d1.counts, d2.counts))
+}
 
 case class Counts(positiveTests: Int, hospitalAdmissions: Int, deaths: Int)
 
@@ -39,19 +53,6 @@ object Counts {
       case (Overleden, Some(aantal))        => Counts(0, 0, aantal)
       case _                                => Counts(0, 0, 0)
     }
-}
-
-object MunicipalityData {
-  def fromRow(r: RivmDataRow): MunicipalityData =
-    MunicipalityData(
-      r.date,
-      r.municipality,
-      r.province,
-      Counts.fromRow(r)
-    )
-
-  def add(d1: MunicipalityData, d2: MunicipalityData): MunicipalityData =
-    d1.copy(counts = Counts.add(d1.counts, d2.counts))
 }
 
 case class CovidStatistics(
