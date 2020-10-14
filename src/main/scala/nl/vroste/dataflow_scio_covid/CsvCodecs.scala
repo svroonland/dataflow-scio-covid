@@ -37,10 +37,13 @@ object CsvCodecs {
       "Province",
       "HospitalAdmissions",
       "HospitalAdmissionsAvg",
+      "HospitalAdmissionsStdDev",
       "Cases",
       "CasesAvg",
+      "CasesStdDev",
       "Deaths",
-      "DeathsAvg"
+      "DeathsAvg",
+      "DeathsStdDev"
     ) { (stats: CovidStatistics) =>
       (
         stats.municipality.date,
@@ -48,10 +51,13 @@ object CsvCodecs {
         stats.municipality.province,
         stats.current.hospitalAdmissions,
         stats.average.hospitalAdmissions,
+        stats.stdDev.hospitalAdmissions,
         stats.current.positiveTests,
         stats.average.positiveTests,
+        stats.stdDev.positiveTests,
         stats.current.deaths,
-        stats.average.deaths
+        stats.average.deaths,
+        stats.stdDev.deaths
       )
     }
 

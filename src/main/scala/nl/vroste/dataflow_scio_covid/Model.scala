@@ -58,5 +58,6 @@ object Counts {
 case class CovidStatistics(
     municipality: MunicipalityData,
     current: Counts,
-    average: Counts
+    average: Counts,
+    stdDev: Counts
 )

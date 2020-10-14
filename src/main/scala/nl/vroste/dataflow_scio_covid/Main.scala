@@ -3,7 +3,12 @@ package nl.vroste.dataflow_scio_covid
 import com.spotify.scio._
 import com.spotify.scio.extra.csv._
 import com.spotify.scio.values.{SCollection, WindowOptions}
-import com.twitter.algebird.{Aggregator, AveragedValue, MonoidAggregator}
+import com.twitter.algebird.{
+  Aggregator,
+  AveragedValue,
+  Moments,
+  MonoidAggregator
+}
 import Util.dateToInstant
 import org.apache.beam.sdk.transforms.windowing.{
   AfterWatermark,
@@ -34,13 +39,30 @@ object Main {
         case ((p, h), d) => Counts(p.toInt, h.toInt, d.toInt)
       }
 
+  val varianceAggregator
+      : MonoidAggregator[Counts, ((Moments, Moments), Moments), Counts] =
+    (Moments.aggregator zip Moments.aggregator zip Moments.aggregator)
+      .composePrepare[Counts](c =>
+        ((c.positiveTests, c.hospitalAdmissions), c.deaths)
+      )
+      .andThenPresent {
+        case ((p, h), d) =>
+          Counts(p.stddev.toInt, p.stddev.toInt, p.stddev.toInt)
+      }
+
   // Aggregator for whole GemeenteData objects
   val municipalityDataAggregator =
     (Aggregator.maxBy((_: MunicipalityData).date) join // Output the
-      countAverageAggregator.composePrepare[MunicipalityData](_.counts))
+      (countAverageAggregator join varianceAggregator)
+        .composePrepare[MunicipalityData](_.counts))
       .andThenPresent {
-        case (municipalityData, average) =>
-          CovidStatistics(municipalityData, municipalityData.counts, average)
+        case (municipalityData, (average, stddev)) =>
+          CovidStatistics(
+            municipalityData,
+            municipalityData.counts,
+            average,
+            stddev
+          )
       }
 
   def main(cmdlineArgs: Array[String]): Unit = {

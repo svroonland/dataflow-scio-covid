@@ -5,7 +5,7 @@ Example code for processing COVID data with [Google Dataflow](https://cloud.goog
 ## Running 
 
 ```
-sbt runMain nl.vroste.Main --project=google-cloud-project-id --runner=DataflowRunner --zone=us-central1-a --region=us-central1 --input=gs://bucketname/RIVM_NL_municipal.csv --output=gs://bucketname/outputfolder
+sbt runMain nl.vroste.dataflow_scio_covid.Main --project=google-cloud-project-id --runner=DataflowRunner --zone=us-central1-a --region=us-central1 --input=gs://bucketname/RIVM_NL_municipal.csv --output=gs://bucketname/outputfolder
 ```
 
 ### REPL
