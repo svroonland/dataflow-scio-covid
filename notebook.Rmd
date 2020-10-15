@@ -36,6 +36,10 @@ glimpse(data2)
 ## Plot
 
 ```{r}
-secondWave = data2 %>% filter(Municipality %in% c("Utrecht", "Amsterdam", "Rotterdam")) %>% filter(Date >= as.POSIXct("2020-06-01"))
-qplot(Date, Value, color=Measurement, data = secondWave, geom="line", log="y") + facet_wrap(vars(Municipality))
+secondWave = data %>% filter(Municipality %in% c("Utrecht", "Amsterdam", "Goes")) %>% filter(Date >= as.POSIXct("2020-07-01"))
+ggplot(data = secondWave, aes(x=Date)) + 
+  geom_ribbon(aes(ymin = CasesAvg - CasesStdDev, ymax = CasesAvg + CasesStdDev), fill="grey80") +
+  geom_point(aes(y = Cases), show.legend = TRUE, color="darkgreen", size=0.5) + scale_y_log10() + 
+  geom_line(aes(y = CasesAvg), color="darkred", linetype="twodash") +
+  facet_wrap(vars(Municipality))
 ```
