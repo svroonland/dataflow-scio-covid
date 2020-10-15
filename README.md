@@ -4,18 +4,29 @@ Example code for processing COVID data with [Google Dataflow](https://cloud.goog
 
 ## Running 
 
+* Get the input data:
+
 ```
-sbt runMain nl.vroste.dataflow_scio_covid.Main --project=google-cloud-project-id --runner=DataflowRunner --zone=us-central1-a --region=us-central1 --input=gs://bucketname/RIVM_NL_municipal.csv --output=gs://bucketname/outputfolder
+curl -L https://github.com/J535D165/CoronaWatchNL/raw/master/data-geo/data-municipal/RIVM_NL_municipal.csv > RIVM_NL_municipal.csv
 ```
 
-### REPL
+* Copy it to Google Storage
 
-To experiment with current codebase in [Scio REPL](https://github.com/spotify/scio/wiki/Scio-REPL)
-simply:
-
-```bash
-sbt repl/run
 ```
+gsutil cp RIVM_NL_municipal.csv gs://steven-dataworkz-scio
+```
+
+```
+sbt runMain nl.vroste.dataflow_scio_covid.Main  
+    --project=google-cloud-project-id 
+    --runner=DataflowRunner 
+    --zone=us-central1-a
+    --region=us-central1 
+    --input=gs://bucketname/RIVM_NL_municipal.csv 
+    --output=gs://bucketname/outputfolder
+```
+
+Run the R notebook in `notebook.Rmd` in RStudio to produce plots.
 
 ---
 
