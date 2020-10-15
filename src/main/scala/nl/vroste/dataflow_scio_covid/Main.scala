@@ -9,7 +9,7 @@ import com.twitter.algebird.{
   Moments,
   MonoidAggregator
 }
-import Util.dateToInstant
+import nl.vroste.dataflow_scio_covid.Util.dateToInstant
 import org.apache.beam.sdk.transforms.windowing.{
   AfterWatermark,
   TimestampCombiner
@@ -23,38 +23,27 @@ object Main {
   import CsvCodecs._
   import Util.scalaDurationAsJodaDuration
 
-  // Aggregator for averages of Counts
-  val countAverageAggregator: MonoidAggregator[
+  val momentsAggregator: MonoidAggregator[
     Counts,
-    ((AveragedValue, AveragedValue), AveragedValue),
-    Counts
+    ((Moments, Moments), Moments),
+    (Counts, Counts)
   ] =
-    (AveragedValue.numericAggregator[Int] zip
-      AveragedValue.numericAggregator[Int] zip
-      AveragedValue.numericAggregator[Int])
-      .composePrepare[Counts](c =>
-        ((c.positiveTests, c.hospitalAdmissions), c.deaths)
-      )
-      .andThenPresent {
-        case ((p, h), d) => Counts(p.toInt, h.toInt, d.toInt)
-      }
-
-  val varianceAggregator
-      : MonoidAggregator[Counts, ((Moments, Moments), Moments), Counts] =
     (Moments.aggregator zip Moments.aggregator zip Moments.aggregator)
       .composePrepare[Counts](c =>
         ((c.positiveTests, c.hospitalAdmissions), c.deaths)
       )
       .andThenPresent {
         case ((p, h), d) =>
-          Counts(p.stddev.toInt, p.stddev.toInt, p.stddev.toInt)
+          (
+            Counts(p.mean.toInt, h.mean.toInt, d.mean.toInt),
+            Counts(p.stddev.toInt, h.stddev.toInt, d.stddev.toInt)
+          )
       }
 
   // Aggregator for whole GemeenteData objects
   val municipalityDataAggregator =
-    (Aggregator.maxBy((_: MunicipalityData).date) join // Output the
-      (countAverageAggregator join varianceAggregator)
-        .composePrepare[MunicipalityData](_.counts))
+    (Aggregator.maxBy((_: MunicipalityData).date) join
+      momentsAggregator.composePrepare[MunicipalityData](_.counts))
       .andThenPresent {
         case (municipalityData, (average, stddev)) =>
           CovidStatistics(
@@ -79,15 +68,14 @@ object Main {
         size = 7.days,
         period = 1.day,
         options = WindowOptions(
+          // TODO figure out which of these are essential
           timestampCombiner = TimestampCombiner.END_OF_WINDOW,
           trigger = AfterWatermark.pastEndOfWindow(),
           allowedLateness = 0.days,
           accumulationMode = AccumulationMode.DISCARDING_FIRED_PANES
         )
       )
-      .map(
-        MunicipalityData.fromRow
-      )
+      .map(MunicipalityData.fromRow)
       .keyBy(d => (d.municipality, d.date))
       .reduceByKey(MunicipalityData.add)
       .values
