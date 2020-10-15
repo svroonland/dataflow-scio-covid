@@ -23,7 +23,7 @@ require("tidyr")
 
 ## Load data
 ```{r}
-data = read.csv("~/projects/dataworkz/scio-job/output/result.csv") %>% mutate(Datum = as.POSIXct(Datum), Gemeentenaam = factor(Gemeentenaam))
+data = read.csv("~/projects/dataworkz/scio-job/output/result.csv") %>% mutate(Date = as.POSIXct(Date), Municipality = factor(Municipality))
 glimpse(data)
 ```
 
@@ -36,6 +36,6 @@ glimpse(data2)
 ## Plot
 
 ```{r}
-secondWave = data2 %>% filter(Gemeentenaam %in% c("Utrecht", "Amsterdam", "Rotterdam")) %>% filter(Datum >= as.POSIXct("2020-06-01"))
-qplot(Datum, Value, color=Measurement, data = secondWave, geom="line", log="y") + facet_wrap(vars(Gemeentenaam))
+secondWave = data2 %>% filter(Municipality %in% c("Utrecht", "Amsterdam", "Rotterdam")) %>% filter(Date >= as.POSIXct("2020-06-01"))
+qplot(Date, Value, color=Measurement, data = secondWave, geom="line", log="y") + facet_wrap(vars(Municipality))
 ```
