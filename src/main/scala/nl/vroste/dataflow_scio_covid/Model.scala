@@ -3,9 +3,9 @@ package nl.vroste.dataflow_scio_covid
 import org.joda.time.LocalDate
 
 sealed trait DataType
-case object ZiekenhuisOpname extends DataType
-case object Totaal extends DataType
-case object Overleden extends DataType
+case object HospitalAdmissions extends DataType
+case object PositiveTests extends DataType
+case object Deaths extends DataType
 
 case class RivmDataRow(
     date: LocalDate,
@@ -48,10 +48,10 @@ object Counts {
 
   def fromRow(r: RivmDataRow): Counts =
     (r.`type`, r.number) match {
-      case (Totaal, Some(aantal))           => Counts(aantal, 0, 0)
-      case (ZiekenhuisOpname, Some(aantal)) => Counts(0, aantal, 0)
-      case (Overleden, Some(aantal))        => Counts(0, 0, aantal)
-      case _                                => Counts(0, 0, 0)
+      case (PositiveTests, Some(number))      => Counts(number, 0, 0)
+      case (HospitalAdmissions, Some(number)) => Counts(0, number, 0)
+      case (Deaths, Some(number))             => Counts(0, 0, number)
+      case _                                  => Counts(0, 0, 0)
     }
 }
 
