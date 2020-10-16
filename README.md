@@ -1,6 +1,6 @@
 # dataflow-scio-covid
 
-Example code for processing COVID data with [Google Dataflow](https://cloud.google.com/dataflow) using [Scio](https://spotify.github.io/scio/)
+Example code for the [blog article](https://medium.com/@svroonland/processing-covid-data-through-google-dataflow-in-scala-196ccbc3615d) about processing COVID data with [Google Dataflow](https://cloud.google.com/dataflow) using [Scio](https://spotify.github.io/scio/)
 
 ## Running 
 
