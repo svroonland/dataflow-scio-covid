@@ -29,14 +29,15 @@ glimpse(data)
 
 ## Prepare for plotting
 ```{r}
-data2 = data %>% gather("Cases", "CasesAvg", key="Measurement", value="Value")
+secondWave = data %>% filter(Municipality %in% c("Amsterdam", "Rotterdam", "Utrecht")) %>% filter(Date >= as.POSIXct("2020-07-01"))
+
+data2 = secondWave %>% gather("Cases", "CasesAvg", key="Measurement", value="Value")
 glimpse(data2)
 ```
 
 ## Plot
 
 ```{r}
-secondWave = data %>% filter(Municipality %in% c("Utrecht", "Amsterdam", "Goes")) %>% filter(Date >= as.POSIXct("2020-07-01"))
 ggplot(data = secondWave, aes(x=Date)) + 
   geom_ribbon(aes(ymin = CasesAvg - CasesStdDev, ymax = CasesAvg + CasesStdDev), fill="grey80") +
   geom_point(aes(y = Cases), show.legend = TRUE, color="darkgreen", size=0.5) + scale_y_log10() + 
